@@ -1,6 +1,6 @@
 # SiDaW Player — Rust edition (Windows)
 
-**Готовый установщик 0.4.0:** [SiDaWPlayer-setup.exe](https://github.com/SiDaw21/SiDaWPlayer/releases/download/v0.4.0-rust/SiDaWPlayer-setup.exe) · [страница релиза](https://github.com/SiDaw21/SiDaWPlayer/releases/tag/v0.4.0-rust). Сборку каждого коммита делает GitHub Actions, бинарник проверен компиляцией на Windows-раннере.
+**Готовый установщик 0.5.0:** [SiDaWPlayer-setup.exe](https://github.com/SiDaw21/SiDaWPlayer/releases/download/v0.5.0-rust/SiDaWPlayer-setup.exe) · [страница релиза](https://github.com/SiDaw21/SiDaWPlayer/releases/tag/v0.5.0-rust). Сборку каждого коммита делает GitHub Actions, бинарник проверен компиляцией на Windows-раннере.
 
 Нативная версия плеера на Rust + egui: своя медиатека, гибкое оформление, «Моя волна» и треки из открытых каталогов. Веб-версия на JS остаётся в `../sidaw-player`.
 

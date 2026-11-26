@@ -191,11 +191,14 @@ impl SiDawApp {
     fn apply_theme(&self, ctx: &egui::Context, accent: egui::Color32) {
         ctx.set_pixels_per_point(self.state.theme.scale);
         let mut visuals = if self.state.theme.light { egui::Visuals::light() } else { egui::Visuals::dark() };
-        // Полупрозрачные панели: сквозь них видно анимированную «волну» на фоне.
-        let base = if self.state.theme.light { egui::Color32::from_gray(246) } else { egui::Color32::from_gray(12) };
-        let glass = egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), 205);
-        visuals.window_fill = glass;
-        visuals.panel_fill = glass;
+        // Панели непрозрачные: фон рисуется внутри central panel под виджетами.
+        let base = if self.state.theme.light {
+            egui::Color32::from_rgb(238, 240, 248)
+        } else {
+            egui::Color32::from_rgb(12, 14, 24)
+        };
+        visuals.window_fill = base;
+        visuals.panel_fill = base;
         visuals.selection.bg_fill = accent;
         visuals.widgets.active.bg_fill = accent;
         visuals.widgets.hovered.bg_fill = self.design.glow(45.0);
@@ -337,7 +340,7 @@ impl SiDawApp {
 impl eframe::App for SiDawApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let playing = self.engine.is_playing();
-        let accent = self.design.frame(ctx, self.state.theme.accent, self.state.theme.light, playing);
+        let accent = self.design.frame(self.state.theme.accent, playing);
         self.apply_theme(ctx, accent);
         ctx.request_repaint_after(Duration::from_millis(90)); // анимация волны и прогресс воспроизведения
         if self.engine.is_finished() {
@@ -413,6 +416,7 @@ impl eframe::App for SiDawApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            self.design.paint(ui, self.state.theme.light);
             let title = match self.view {
                 View::All => "Все треки",
                 View::Favorites => "Любимое",

@@ -1,6 +1,6 @@
 ; Inno Setup 6 — установщик SiDaW Player (Rust edition)
 #define MyAppName "SiDaW Player"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.5.0"
 #define MyAppPublisher "SiDaW"
 #define MyAppExeName "sidaw-player.exe"
 

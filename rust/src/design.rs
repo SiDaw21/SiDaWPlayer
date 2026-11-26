@@ -1,5 +1,6 @@
-//! Неоновая «волна»: анимированный фон, плавная смена акцента и визуализатор.
-use eframe::egui::{self, Color32, Id, LayerId, Order, Pos2, Rect, Shape, Stroke};
+//! Неоновая «волна»: плавная смена акцента, мягкий фон и визуализатор.
+//! Фон рисуется внутри центральной панели до виджетов, поэтому никогда их не перекрывает.
+use eframe::egui::{self, Color32, Pos2, Rect, Shape, Stroke};
 use std::time::Instant;
 
 pub struct Design {
@@ -11,17 +12,11 @@ pub struct Design {
 
 impl Design {
     pub fn new() -> Self {
-        // Стартуем с тёмного акцента — цвета плавно «проявляются» при запуске.
-        Self {
-            time: 0.0,
-            energy: 0.0,
-            accent: Color32::from_gray(40),
-            last_frame: Instant::now(),
-        }
+        Self { time: 0.0, energy: 0.0, accent: Color32::from_gray(40), last_frame: Instant::now() }
     }
 
-    /// Вызывается раз в кадр до настройки визуалов. Возвращает сглаженный акцент.
-    pub fn frame(&mut self, ctx: &egui::Context, accent_rgb: [u8; 3], light: bool, playing: bool) -> Color32 {
+    /// Обновляет анимационные параметры и возвращает сглаженный акцент.
+    pub fn frame(&mut self, accent_rgb: [u8; 3], playing: bool) -> Color32 {
         let dt = self.last_frame.elapsed().as_secs_f32().min(0.1);
         self.last_frame = Instant::now();
         self.time += dt;
@@ -36,8 +31,6 @@ impl Design {
             lerp_u8(self.accent.g(), target.g(), k),
             lerp_u8(self.accent.b(), target.b(), k),
         );
-
-        self.paint_background(ctx, light);
         self.accent
     }
 
@@ -54,40 +47,40 @@ impl Design {
             self.accent.r(),
             self.accent.g(),
             self.accent.b(),
-            (alpha.clamp(0.0, 255.0)) as u8,
+            alpha.clamp(0.0, 255.0) as u8,
         )
     }
 
-    fn paint_background(&self, ctx: &egui::Context, light: bool) {
-        let painter = ctx.layer_painter(LayerId::new(Order::Background, Id::new("sidaw-neon-wave")));
-        let rect = ctx.screen_rect();
-        let base = if light { Color32::from_rgb(238, 240, 248) } else { Color32::from_rgb(8, 10, 18) };
+    /// Рисует фон в уже отведённой области central panel — строго под виджетами.
+    pub fn paint(&self, ui: &egui::Ui, light: bool) {
+        let painter = ui.painter();
+        let rect = ui.clip_rect();
+        let base = if light { Color32::from_rgb(238, 240, 248) } else { Color32::from_rgb(12, 14, 24) };
         painter.rect_filled(rect, 0.0, base);
 
-        // Мягкое «сияние» в правом верхнем углу: concentric circles с нарастающей прозрачностью.
-        let cx = rect.max.x * 0.78;
-        let cy = rect.min.y + rect.height() * 0.08;
-        let drift = (self.time * 0.35).sin() * 18.0;
-        for i in (0..26).rev() {
-            let t = i as f32 / 26.0;
-            let radius = 30.0 + t * 430.0 + drift;
-            let a = ((1.0 - t) * (16.0 + self.energy * 22.0)) as u8;
-            let color = self.glow(a as f32);
-            painter.circle_filled(Pos2::new(cx, cy), radius, color);
+        // Очень мягкое свечение: 14 полупрозрачных кругов, суммарно ~20% непрозрачности.
+        let cx = rect.min.x + rect.width() * 0.78;
+        let cy = rect.min.y + rect.height() * 0.10;
+        let drift = (self.time * 0.35).sin() * 14.0;
+        for i in (0..14).rev() {
+            let t = i as f32 / 14.0;
+            let radius = 24.0 + t * 300.0 + drift;
+            let alpha = ((1.0 - t) * (3.0 + self.energy * 3.0)) as u8;
+            painter.circle_filled(Pos2::new(cx, cy), radius, self.glow(alpha as f32));
         }
 
-        // Три бегущие синусоиды у нижней границы — «волна» во всё окно.
+        // Три бегущие синусоиды у нижней границы центральной панели.
         for lane in 0..3 {
             let mut points = Vec::with_capacity(72);
             for i in 0..=72 {
                 let x = rect.min.x + rect.width() * i as f32 / 72.0;
                 let phase = self.time * (0.55 + lane as f32 * 0.12) + i as f32 * 0.085;
-                let y = rect.max.y - 26.0 - lane as f32 * 9.0
-                    + phase.sin() * (10.0 + lane as f32 * 5.0) * (0.3 + self.energy * 0.7);
+                let y = rect.max.y - 22.0 - lane as f32 * 8.0
+                    + phase.sin() * (8.0 + lane as f32 * 4.0) * (0.3 + self.energy * 0.7);
                 points.push(Pos2::new(x, y));
             }
-            let alpha = 40.0 + lane as f32 * 18.0 + self.energy * 40.0;
-            painter.add(Shape::line(points, Stroke::new(1.2 + lane as f32 * 0.5, self.glow(alpha))));
+            let alpha = 45.0 + lane as f32 * 15.0 + self.energy * 25.0;
+            painter.add(Shape::line(points, Stroke::new(1.1 + lane as f32 * 0.4, self.glow(alpha))));
         }
     }
 }
