@@ -356,7 +356,7 @@ impl eframe::App for SiDawApp {
             if wave_button.clicked() { self.toggle_wave(); }
             if self.wave {
                 let pulse = 110.0 + 80.0 * (self.design.time() * 3.0).sin().abs();
-                ui.painter().rect_stroke(wave_button.rect.expand(3.0), 7.0, egui::Stroke::new(2.0, self.design.glow(pulse)));
+                ui.painter().rect_stroke(wave_button.rect.expand(3.0), 7.0, egui::Stroke::new(2.0, self.design.glow(pulse)), egui::StrokeKind::Middle);
             }
             if ui.button("Открытый каталог").clicked() { self.show_catalog = !self.show_catalog; }
             if ui.button("Оформление").clicked() { self.show_theme = !self.show_theme; }
@@ -446,7 +446,7 @@ impl eframe::App for SiDawApp {
                     });
                     if active {
                         let pulse = 70.0 + 55.0 * (self.design.time() * 2.6).sin().abs();
-                        ui.painter().rect_stroke(row.response.rect.expand(2.0), 6.0, egui::Stroke::new(1.0, self.design.glow(pulse)));
+                        ui.painter().rect_stroke(row.response.rect.expand(2.0), 6.0, egui::Stroke::new(1.0, self.design.glow(pulse)), egui::StrokeKind::Middle);
                     }
                 }
             });
