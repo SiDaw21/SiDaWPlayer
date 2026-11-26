@@ -1,5 +1,7 @@
 # SiDaW Player — Rust edition (Windows)
 
+**Готовый установщик:** [SiDaWPlayer-setup.exe](https://github.com/SiDaw21/SiDaWPlayer/releases/download/v0.2.0-rust/SiDaWPlayer-setup.exe) (свежая сборка публикуется в [релизе v0.2.0-rust](https://github.com/SiDaw21/SiDaWPlayer/releases/tag/v0.2.0-rust) через GitHub Actions).
+
 Нативная версия плеера на Rust + egui. Это **первый этап порта**: локальная медиатека, воспроизведение, 10-полосный эквалайзер, избранное, поиск и сохранение состояния. Веб-версия на JS остаётся в `../sidaw-player` и пока показывает больше возможностей (радио, тексты, таймер сна, темы, стриминги) — их перенос планируется следующими шагами.
 
 ## Что нужно для сборки на Windows
