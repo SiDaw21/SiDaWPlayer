@@ -1,0 +1,5 @@
+/target/
+/assets/audio/
+/installer/Output/
+*.msi
+*.zip

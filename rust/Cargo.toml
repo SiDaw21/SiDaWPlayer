@@ -1,0 +1,21 @@
+[package]
+name = "sidaw-player"
+version = "0.2.0"
+edition = "2021"
+description = "SiDaW Player — нативный музыкальный плеер на Rust"
+publish = false
+
+[dependencies]
+# Версии зафиксированы: API egui/eframe и rodio меняются между минорными релизами.
+eframe = "=0.31.1"
+egui = "=0.31.1"
+rodio = "=0.19.0"
+rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "5"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
