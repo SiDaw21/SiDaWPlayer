@@ -35,7 +35,7 @@ jobs:
         run: |
           cargo build --release --manifest-path rust/Cargo.toml 2>&1 | Tee-Object -FilePath build.log
           if ($LASTEXITCODE -ne 0) {
-            Get-Content build.log | Where-Object { $_ -match '^error' } | ForEach-Object {
+            Get-Content build.log | Where-Object { $_ -match 'error|-->|help:|note:|arguments|expected|found' } | ForEach-Object {
               $line = $_.Replace('%', '%25').Replace("`r", '').Replace("`n", ' ')
               "::error::$line"
             }
