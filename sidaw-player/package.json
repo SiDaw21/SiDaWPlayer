@@ -1,0 +1,15 @@
+{
+  "name": "sidaw-player",
+  "version": "2.0.0",
+  "private": true,
+  "description": "SiDaW Player — настраиваемый музыкальный плеер с эквалайзером, радио, текстами песен и адаптерами стримингов",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web-server": "node server.js",
+    "dev": "node server.js"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}
