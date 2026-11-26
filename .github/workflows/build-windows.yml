@@ -5,6 +5,9 @@ on:
     branches: [arena/62202821-sidawplayer]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -46,3 +49,19 @@ jobs:
           name: SiDaWPlayer-windows-setup
           path: rust/installer/Output/SiDaWPlayer-setup.exe
           retention-days: 30
+
+      - name: Publish installer as a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.2.0-rust
+          name: SiDaW Player 0.2.0 — Rust edition (Windows)
+          body: |
+            Установщик Windows для нативной Rust-версии плеера (`rust/`).
+
+            Скачай `SiDaWPlayer-setup.exe`, запусти его и следуй инструкциям мастера. Демо-треки включаются в установку.
+
+            Первый этап порта: локальная медиатека, воспроизведение, 10-полосный эквалайзер, избранное, поиск, сохранение состояния. Исходники и инструкция — в `rust/README.md`.
+          files: rust/installer/Output/SiDaWPlayer-setup.exe
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
