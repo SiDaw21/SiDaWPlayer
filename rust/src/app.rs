@@ -2,6 +2,7 @@
 use crate::{
     audio::AudioEngine,
     catalog::{self, AudioItem},
+    design::{self, Design},
     eq::{EqParams, BANDS_HZ, PRESETS},
     library::{self, theme_preset, SavedState, Track, THEME_PRESETS},
 };
@@ -31,6 +32,7 @@ pub struct SiDawApp {
     remote_title: String,
     wave: bool,
     rng: u64,
+    design: Design,
 }
 
 fn format_time(seconds: f32) -> String {
@@ -61,6 +63,7 @@ impl SiDawApp {
             remote_title: String::new(),
             wave: false,
             rng: seed | 1,
+            design: Design::new(),
         }
     }
 
@@ -185,13 +188,15 @@ impl SiDawApp {
         }
     }
 
-    fn apply_theme(&self, ctx: &egui::Context) {
+    fn apply_theme(&self, ctx: &egui::Context, accent: egui::Color32) {
         ctx.set_pixels_per_point(self.state.theme.scale);
         let mut visuals = if self.state.theme.light { egui::Visuals::light() } else { egui::Visuals::dark() };
-        let [r, g, b] = self.state.theme.accent;
-        let accent = egui::Color32::from_rgb(r, g, b);
+        // Полупрозрачные панели: сквозь них видно анимированную «волну» на фоне.
+        let base = if self.state.theme.light { egui::Color32::from_gray(246) } else { egui::Color32::from_gray(12) };
+        visuals.window.fill = egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), 205);
         visuals.selection.bg_fill = accent;
         visuals.widgets.active.bg_fill = accent;
+        visuals.widgets.hovered.bg_fill = self.design.glow(45.0);
         visuals.hyperlink_color = accent;
         ctx.set_visuals(visuals);
     }
@@ -329,8 +334,10 @@ impl SiDawApp {
 
 impl eframe::App for SiDawApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.apply_theme(ctx);
-        ctx.request_repaint_after(Duration::from_millis(250)); // обновляем прогресс воспроизведения
+        let playing = self.engine.is_playing();
+        let accent = self.design.frame(ctx, self.state.theme.accent, self.state.theme.light, playing);
+        self.apply_theme(ctx, accent);
+        ctx.request_repaint_after(Duration::from_millis(90)); // анимация волны и прогресс воспроизведения
         if self.engine.is_finished() {
             if self.wave { self.next_wave(); } else { self.next_track(); }
         }
@@ -343,7 +350,12 @@ impl eframe::App for SiDawApp {
             if ui.button("Недавние").clicked() { self.view = View::Recent; }
             ui.separator();
             let wave_label = if self.wave { "Моя волна · вкл" } else { "Моя волна" };
-            if ui.button(wave_label).clicked() { self.toggle_wave(); }
+            let wave_button = ui.button(wave_label);
+            if wave_button.clicked() { self.toggle_wave(); }
+            if self.wave {
+                let pulse = 110.0 + 80.0 * (self.design.time() * 3.0).sin().abs();
+                ui.painter().rect_stroke(wave_button.rect.expand(3.0), 7.0, egui::Stroke::new(2.0, self.design.glow(pulse)));
+            }
             if ui.button("Открытый каталог").clicked() { self.show_catalog = !self.show_catalog; }
             if ui.button("Оформление").clicked() { self.show_theme = !self.show_theme; }
             ui.separator();
@@ -379,6 +391,9 @@ impl eframe::App for SiDawApp {
                 }
                 if ui.button("Эквалайзер").clicked() { self.show_eq = !self.show_eq; }
             });
+            let strip_width = ui.available_width().min(240.0);
+            let (strip_rect, _) = ui.allocate_exact_size(egui::vec2(strip_width, 20.0), egui::Sense::hover());
+            design::wave(ui, strip_rect, &self.design);
             ui.horizontal(|ui| {
                 let duration = self.engine.duration.map(|d| d.as_secs_f32()).unwrap_or(0.0);
                 let position = self.engine.position().as_secs_f32();
@@ -412,7 +427,7 @@ impl eframe::App for SiDawApp {
                     // Копируем строку: дальше в цикле меняем self (лайки/воспроизведение).
                     let track = self.state.tracks[index].clone();
                     let active = self.state.current_id.as_deref() == Some(track.id.as_str());
-                    ui.horizontal(|ui| {
+                    let row = ui.horizontal(|ui| {
                         if ui.button("▶").clicked() {
                             if active { self.engine.toggle_play(); } else { self.play_index(index); }
                         }
@@ -427,6 +442,10 @@ impl eframe::App for SiDawApp {
                             ui.label(track.album.as_str());
                         });
                     });
+                    if active {
+                        let pulse = 70.0 + 55.0 * (self.design.time() * 2.6).sin().abs();
+                        ui.painter().rect_stroke(row.response.rect.expand(2.0), 6.0, egui::Stroke::new(1.0, self.design.glow(pulse)));
+                    }
                 }
             });
         });

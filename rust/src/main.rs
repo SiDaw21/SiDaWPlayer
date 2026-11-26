@@ -4,6 +4,7 @@
 mod app;
 mod audio;
 mod catalog;
+mod design;
 mod eq;
 mod library;
 
