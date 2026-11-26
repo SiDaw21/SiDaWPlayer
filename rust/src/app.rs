@@ -193,7 +193,9 @@ impl SiDawApp {
         let mut visuals = if self.state.theme.light { egui::Visuals::light() } else { egui::Visuals::dark() };
         // Полупрозрачные панели: сквозь них видно анимированную «волну» на фоне.
         let base = if self.state.theme.light { egui::Color32::from_gray(246) } else { egui::Color32::from_gray(12) };
-        visuals.window.fill = egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), 205);
+        let glass = egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), 205);
+        visuals.window_fill = glass;
+        visuals.panel_fill = glass;
         visuals.selection.bg_fill = accent;
         visuals.widgets.active.bg_fill = accent;
         visuals.widgets.hovered.bg_fill = self.design.glow(45.0);
