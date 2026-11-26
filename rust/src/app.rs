@@ -1,11 +1,12 @@
 //! Интерфейс плеера на egui.
 use crate::{
     audio::AudioEngine,
+    catalog::{self, AudioItem},
     eq::{EqParams, BANDS_HZ, PRESETS},
-    library::{self, SavedState, Track},
+    library::{self, theme_preset, SavedState, Track, THEME_PRESETS},
 };
 use eframe::egui;
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::{sync::{Arc, Mutex}, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 #[derive(Clone, Copy, PartialEq)]
 enum View {
@@ -22,6 +23,14 @@ pub struct SiDawApp {
     search: String,
     status: String,
     show_eq: bool,
+    show_theme: bool,
+    show_catalog: bool,
+    catalog_query: String,
+    catalog_results: Vec<AudioItem>,
+    catalog_message: String,
+    remote_title: String,
+    wave: bool,
+    rng: u64,
 }
 
 fn format_time(seconds: f32) -> String {
@@ -37,7 +46,22 @@ impl SiDawApp {
         let state = library::load_state();
         let params = Arc::new(Mutex::new(state.eq));
         let engine = AudioEngine::new(Arc::clone(&params), state.volume);
-        Self { state, engine, params, view: View::All, search: String::new(), status: "Готово".to_owned(), show_eq: false }
+        let seed = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0x9e3779b9);
+        Self {
+            state, engine, params,
+            view: View::All,
+            search: String::new(),
+            status: "Готово".to_owned(),
+            show_eq: false,
+            show_theme: false,
+            show_catalog: false,
+            catalog_query: String::new(),
+            catalog_results: Vec::new(),
+            catalog_message: String::new(),
+            remote_title: String::new(),
+            wave: false,
+            rng: seed | 1,
+        }
     }
 
     fn persist(&mut self) {
@@ -70,6 +94,8 @@ impl SiDawApp {
         match self.engine.play(&track.path_buf()) {
             Ok(()) => {
                 self.state.current_id = Some(track.id.clone());
+                self.remote_title.clear();
+                *self.state.plays.entry(track.id.clone()).or_insert(0) += 1;
                 self.status = format!("Сейчас играет: {} — {}", track.title, track.artist);
             }
             Err(err) => self.status = err,
@@ -118,6 +144,151 @@ impl SiDawApp {
         self.persist();
     }
 
+    // Простой xorshift: независимый генератор без внешней зависимости.
+    fn random(&mut self) -> f64 {
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 7;
+        self.rng ^= self.rng << 17;
+        ((self.rng >> 11) as f64) / ((1u64 << 53) as f64)
+    }
+
+    /// «Моя волна»: бесконечный микс с учётом избранного и истории прослушиваний.
+    fn next_wave(&mut self) {
+        if self.state.tracks.is_empty() { return; }
+        let current = self.state.current_id.clone().unwrap_or_default();
+        let candidates: Vec<usize> = (0..self.state.tracks.len())
+            .filter(|i| self.state.tracks[*i].id != current)
+            .collect();
+        if candidates.is_empty() { return; }
+        let rolls: Vec<f64> = (0..candidates.len()).map(|_| self.random()).collect();
+        let target = self.random();
+        let mut cumulative = 0.0_f64;
+        let mut chosen = candidates[0];
+        for (pos, &index) in candidates.iter().enumerate() {
+            let track = &self.state.tracks[index];
+            let favorite = if self.state.favorites.contains(&track.id) { 4.0_f64 } else { 1.0 };
+            let familiar = (*self.state.plays.get(&track.id).unwrap_or(&0) as f64).min(20.0) * 0.15;
+            cumulative += (favorite + familiar) * (0.5 + rolls[pos]);
+            chosen = index;
+            if cumulative >= target { break; }
+        }
+        self.play_index(chosen);
+    }
+
+    fn toggle_wave(&mut self) {
+        self.wave = !self.wave;
+        if self.wave {
+            self.status = "Моя волна: подбираю трек…".to_owned();
+            self.next_wave();
+        } else {
+            self.status = "Моя волна выключена".to_owned();
+        }
+    }
+
+    fn apply_theme(&self, ctx: &egui::Context) {
+        ctx.set_pixels_per_point(self.state.theme.scale);
+        let mut visuals = if self.state.theme.light { egui::Visuals::light() } else { egui::Visuals::dark() };
+        let [r, g, b] = self.state.theme.accent;
+        let accent = egui::Color32::from_rgb(r, g, b);
+        visuals.selection.bg_fill = accent;
+        visuals.widgets.active.bg_fill = accent;
+        visuals.hyperlink_color = accent;
+        ctx.set_visuals(visuals);
+    }
+
+    fn theme_window(&mut self, ctx: &egui::Context) {
+        if !self.show_theme { return; }
+        let mut changed = false;
+        egui::Window::new("Оформление").open(&mut self.show_theme).show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for (id, name, _, _, _) in THEME_PRESETS {
+                    if ui.button(*name).clicked() {
+                        self.state.theme = theme_preset(id);
+                        changed = true;
+                    }
+                }
+            });
+            ui.separator();
+            let mut light = self.state.theme.light;
+            if ui.checkbox(&mut light, "Светлый режим").changed() {
+                self.state.theme.light = light;
+                changed = true;
+            }
+            let mut scale = self.state.theme.scale;
+            if ui.add(egui::Slider::new(&mut scale, 0.85..=1.15).text("Масштаб интерфейса")).changed() {
+                self.state.theme.scale = scale;
+                changed = true;
+            }
+            ui.separator();
+            ui.label("Акцентный цвет (RGB)");
+            let mut accent = self.state.theme.accent;
+            for (i, name) in ["R", "G", "B"].iter().enumerate() {
+                ui.add(egui::Slider::new(&mut accent[i], 0..=255).text(*name));
+            }
+            if accent != self.state.theme.accent {
+                self.state.theme.accent = accent;
+                changed = true;
+            }
+            if ui.button("Сбросить оформление").clicked() {
+                self.state.theme = theme_preset("night");
+                changed = true;
+            }
+        });
+        if changed { self.persist(); }
+    }
+
+    fn catalog_window(&mut self, ctx: &egui::Context) {
+        if !self.show_catalog { return; }
+        egui::Window::new("Открытый каталог").open(&mut self.show_catalog).show(ctx, |ui| {
+            ui.label("Треки с открытыми лицензиями через Openverse (Jamendo, Freesound, Wikimedia).");
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.catalog_query);
+                if ui.button("Найти").clicked() {
+                    let query = self.catalog_query.trim().to_owned();
+                    if query.chars().count() < 2 {
+                        self.catalog_message = "Введите хотя бы 2 символа".to_owned();
+                    } else {
+                        match catalog::search(&query) {
+                            Ok(items) => {
+                                self.catalog_message = format!("Найдено треков: {}", items.len());
+                                self.catalog_results = items;
+                            }
+                            Err(err) => {
+                                self.catalog_message = err;
+                                self.catalog_results.clear();
+                            }
+                        }
+                    }
+                }
+            });
+            ui.label(self.catalog_message.as_str());
+            ui.separator();
+            egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
+                for item in self.catalog_results.clone() {
+                    ui.horizontal(|ui| {
+                        if ui.button("▶").clicked() {
+                            match catalog::fetch_bytes(&item.url).and_then(|bytes| self.engine.play_buffer(bytes)) {
+                                Ok(()) => {
+                                    self.state.current_id = None;
+                                    self.remote_title = format!("{} — {}", item.title, item.author());
+                                    self.status = "Играет из открытого каталога".to_owned();
+                                }
+                                Err(err) => self.status = err,
+                            }
+                        }
+                        ui.label(format!("{} — {}", item.title, item.author()));
+                    });
+                    ui.label(format!("{} · {} · {}", item.provider, item.license.to_uppercase(),
+                        format_time(item.duration.unwrap_or(0) as f32 / 1000.0)));
+                    if let Some(attribution) = &item.attribution {
+                        ui.label(egui::RichText::new(attribution.as_str()).small());
+                    }
+                    ui.separator();
+                }
+            });
+        });
+    }
+
     fn eq_window(&mut self, ctx: &egui::Context) {
         if !self.show_eq { return; }
         let before = *self.params.lock().expect("params mutex poisoned");
@@ -158,10 +329,10 @@ impl SiDawApp {
 
 impl eframe::App for SiDawApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.set_visuals(egui::Visuals::dark());
+        self.apply_theme(ctx);
         ctx.request_repaint_after(Duration::from_millis(250)); // обновляем прогресс воспроизведения
         if self.engine.is_finished() {
-            self.next_track();
+            if self.wave { self.next_wave(); } else { self.next_track(); }
         }
 
         egui::SidePanel::left("navigation").default_width(200.0).show(ctx, |ui| {
@@ -170,6 +341,11 @@ impl eframe::App for SiDawApp {
             if ui.button("Все треки").clicked() { self.view = View::All; }
             if ui.button("Любимое").clicked() { self.view = View::Favorites; }
             if ui.button("Недавние").clicked() { self.view = View::Recent; }
+            ui.separator();
+            let wave_label = if self.wave { "Моя волна · вкл" } else { "Моя волна" };
+            if ui.button(wave_label).clicked() { self.toggle_wave(); }
+            if ui.button("Открытый каталог").clicked() { self.show_catalog = !self.show_catalog; }
+            if ui.button("Оформление").clicked() { self.show_theme = !self.show_theme; }
             ui.separator();
             if ui.button("Добавить музыку…").clicked() { self.add_files(); }
             ui.label(format!("Треков в медиатеке: {}", self.state.tracks.len()));
@@ -180,7 +356,9 @@ impl eframe::App for SiDawApp {
                 let title = self.state.tracks.iter()
                     .find(|t| Some(t.id.as_str()) == self.state.current_id.as_deref())
                     .map(|t| format!("{} — {}", t.title, t.artist))
-                    .unwrap_or_else(|| "Ничего не выбрано".to_owned());
+                    .unwrap_or_else(|| {
+                        if self.remote_title.is_empty() { "Ничего не выбрано".to_owned() } else { self.remote_title.clone() }
+                    });
                 let short_title = if title.chars().count() > 60 {
                     format!("{}…", title.chars().take(60).collect::<String>())
                 } else {
@@ -254,5 +432,7 @@ impl eframe::App for SiDawApp {
         });
 
         self.eq_window(ctx);
+        self.theme_window(ctx);
+        self.catalog_window(ctx);
     }
 }

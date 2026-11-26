@@ -1,7 +1,7 @@
 //! Аудиодвижок: rodio + Sink + EQ-обёртка над потоком сэмплов.
 use crate::eq::{EqParams, EqSource};
 use rodio::{Decoder, OutputStream, Sink, Source};
-use std::{fs::File, io::BufReader, path::Path, sync::{Arc, Mutex}, time::Duration};
+use std::{fs::File, io::{BufReader, Cursor}, path::Path, sync::{Arc, Mutex}, time::Duration};
 
 pub struct AudioEngine {
     // Stream должен жить всё время, пока играет Sink.
@@ -30,19 +30,35 @@ impl AudioEngine {
         Ok(())
     }
 
-    pub fn play(&mut self, path: &Path) -> Result<(), String> {
-        self.has_track = false;
-        self.ensure_sink()?;
-        let file = File::open(path).map_err(|e| format!("Не удалось открыть файл: {e}"))?;
-        let decoder = Decoder::new(BufReader::new(file)).map_err(|e| format!("Формат не поддерживается: {e}"))?;
-        let duration = decoder.total_duration();
-        let source = decoder.convert_samples::<f32>();
+    fn append_source<S>(&mut self, source: S, duration: Option<Duration>)
+    where
+        S: rodio::Source<Item = f32> + Send + 'static,
+    {
         let sink = self.sink.as_ref().expect("sink initialized");
         sink.stop();
         sink.append(EqSource::new(source, Arc::clone(&self.params)));
         sink.play();
         self.duration = duration;
         self.has_track = true;
+    }
+
+    pub fn play(&mut self, path: &Path) -> Result<(), String> {
+        self.has_track = false;
+        self.ensure_sink()?;
+        let file = File::open(path).map_err(|e| format!("Не удалось открыть файл: {e}"))?;
+        let decoder = Decoder::new(BufReader::new(file)).map_err(|e| format!("Формат не поддерживается: {e}"))?;
+        let duration = decoder.total_duration();
+        self.append_source(decoder.convert_samples::<f32>(), duration);
+        Ok(())
+    }
+
+    /// Воспроизведение трека из открытого каталога (байты уже скачаны).
+    pub fn play_buffer(&mut self, bytes: Vec<u8>) -> Result<(), String> {
+        self.has_track = false;
+        self.ensure_sink()?;
+        let decoder = Decoder::new(Cursor::new(bytes)).map_err(|e| format!("Формат не поддерживается: {e}"))?;
+        let duration = decoder.total_duration();
+        self.append_source(decoder.convert_samples::<f32>(), duration);
         Ok(())
     }
 

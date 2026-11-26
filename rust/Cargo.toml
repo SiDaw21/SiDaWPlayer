@@ -1,6 +1,6 @@
 [package]
 name = "sidaw-player"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "SiDaW Player — нативный музыкальный плеер на Rust"
 publish = false
@@ -14,6 +14,7 @@ rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 directories = "5"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 [profile.release]
 opt-level = 3

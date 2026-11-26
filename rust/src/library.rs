@@ -2,7 +2,7 @@
 use crate::eq::EqParams;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::{Path, PathBuf}};
+use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Track {
@@ -34,6 +34,36 @@ impl Track {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ThemeState {
+    pub preset: String,
+    pub accent: [u8; 3],
+    pub light: bool,
+    pub scale: f32,
+}
+
+impl Default for ThemeState {
+    fn default() -> Self {
+        Self { preset: "night".to_owned(), accent: [155, 140, 255], light: false, scale: 1.0 }
+    }
+}
+
+/// Пресеты оформления: имя, название, акцент, светлый режим, масштаб.
+pub const THEME_PRESETS: &[(&str, &str, [u8; 3], bool, f32)] = &[
+    ("night", "SiDaW Night", [155, 140, 255], false, 1.0),
+    ("aurora", "Aurora", [79, 214, 192], false, 1.0),
+    ("sunset", "Sunset", [255, 154, 107], false, 1.0),
+    ("paper", "Paper", [109, 99, 232], true, 1.0),
+    ("graphite", "Graphite", [184, 192, 204], false, 0.95),
+];
+
+pub fn theme_preset(id: &str) -> ThemeState {
+    let (key, _, accent, light, scale) = THEME_PRESETS.iter()
+        .find(|(key, ..)| *key == id)
+        .unwrap_or(&THEME_PRESETS[0]);
+    ThemeState { preset: (*key).to_owned(), accent: *accent, light: *light, scale: *scale }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SavedState {
     pub tracks: Vec<Track>,
@@ -41,6 +71,10 @@ pub struct SavedState {
     pub current_id: Option<String>,
     pub volume: f32,
     pub eq: EqParams,
+    #[serde(default)]
+    pub theme: ThemeState,
+    #[serde(default)]
+    pub plays: HashMap<String, u32>,
 }
 
 impl Default for SavedState {
@@ -51,6 +85,8 @@ impl Default for SavedState {
             current_id: None,
             volume: 0.72,
             eq: EqParams::default(),
+            theme: ThemeState::default(),
+            plays: HashMap::new(),
         }
     }
 }
@@ -100,14 +136,14 @@ pub fn load_state() -> SavedState {
         .unwrap_or_default();
 
     // Демо-треки всегда доступны; пользовательские добавляются после них.
-    let SavedState { tracks: saved_tracks, favorites, current_id, volume, eq } = saved;
+    let SavedState { tracks: saved_tracks, favorites, current_id, volume, eq, theme, plays } = saved;
     let mut tracks = demo_tracks();
     for track in saved_tracks {
         if !tracks.iter().any(|t| t.id == track.id) {
             tracks.push(track);
         }
     }
-    SavedState { tracks, favorites, current_id, volume, eq }
+    SavedState { tracks, favorites, current_id, volume, eq, theme, plays }
 }
 
 pub fn save_state(state: &SavedState) {

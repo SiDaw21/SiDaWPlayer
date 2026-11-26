@@ -3,6 +3,7 @@
 
 mod app;
 mod audio;
+mod catalog;
 mod eq;
 mod library;
 
